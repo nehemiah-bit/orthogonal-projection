@@ -1,0 +1,402 @@
+import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { RefreshCw, Eye, EyeOff, Move, MousePointer2, Info } from 'lucide-react';
+
+/**
+ * A standalone React component visualizing Orthogonal Projection.
+ * Implements a custom lightweight 3D projection engine to avoid external heavy dependencies.
+ */
+const OrthogonalProjectionViz = () => {
+  // --- State Management ---
+  
+  // Camera/Rotation state
+  const [rotation, setRotation] = useState({ x: -20, y: 45 });
+  const [isDraggingScene, setIsDraggingScene] = useState(false);
+  const [lastMousePos, setLastMousePos] = useState({ x: 0, y: 0 });
+
+  // Geometry State
+  // Plane is defined as y = 0 for simplicity.
+  const [pointP, setPointP] = useState({ x: 50, y: 120, z: 50 }); // The point in space
+  const [pointQ, setPointQ] = useState({ x: -50, y: 0, z: -50 }); // The arbitrary point on plane
+
+  // Visibility Toggles
+  const [showProjection, setShowProjection] = useState(false);
+  const [showSegmentPQ, setShowSegmentPQ] = useState(false);
+  
+  // Interaction State
+  const [isDraggingQ, setIsDraggingQ] = useState(false);
+  
+  const canvasRef = useRef(null);
+  const containerRef = useRef(null);
+
+  // --- 3D Math Helpers ---
+
+  // Convert degrees to radians
+  const toRad = (deg) => (deg * Math.PI) / 180;
+
+  // Project 3D point (x,y,z) to 2D screen coordinates (sx, sy)
+  // Uses a simple weak perspective projection with rotation
+  const project = (p) => {
+    const radX = toRad(rotation.x);
+    const radY = toRad(rotation.y);
+
+    // Rotate around Y axis
+    const x1 = p.x * Math.cos(radY) - p.z * Math.sin(radY);
+    const z1 = p.x * Math.sin(radY) + p.z * Math.cos(radY);
+
+    // Rotate around X axis
+    const y2 = p.y * Math.cos(radX) - z1 * Math.sin(radX);
+    const z2 = p.y * Math.sin(radX) + z1 * Math.cos(radX);
+
+    // Perspective scale (simple)
+    const scale = 800 / (800 + z2); 
+    
+    // Center on canvas (assuming 800x600 canvas internally)
+    return {
+      x: 400 + x1 * scale,
+      y: 300 - y2 * scale, // Invert Y for screen coords
+      scale: scale,
+      depth: z2 // Used for z-sorting if needed
+    };
+  };
+
+  // Calculate Euclidean distance between two 3D points
+  const distance3D = (p1, p2) => {
+    return Math.sqrt(
+      Math.pow(p2.x - p1.x, 2) + 
+      Math.pow(p2.y - p1.y, 2) + 
+      Math.pow(p2.z - p1.z, 2)
+    );
+  };
+
+  // --- Interaction Handlers ---
+
+  const randomizeP = () => {
+    setPointP({
+      x: (Math.random() - 0.5) * 200,
+      y: 80 + Math.random() * 100, // Keep it well above plane
+      z: (Math.random() - 0.5) * 200
+    });
+  };
+
+  const handleMouseDown = (e) => {
+    const rect = containerRef.current.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+
+    // Check if clicking on Q (projected)
+    const projQ = project(pointQ);
+    const distToQ = Math.sqrt(Math.pow(mouseX - projQ.x, 2) + Math.pow(mouseY - projQ.y, 2));
+
+    if (distToQ < 20) { // Hit radius
+      setIsDraggingQ(true);
+    } else {
+      setIsDraggingScene(true);
+    }
+    setLastMousePos({ x: e.clientX, y: e.clientY });
+  };
+
+  const handleMouseMove = (e) => {
+    if (isDraggingScene) {
+      const deltaX = e.clientX - lastMousePos.x;
+      const deltaY = e.clientY - lastMousePos.y;
+      setRotation(prev => ({
+        x: Math.max(-85, Math.min(85, prev.x + deltaY * 0.5)), // Clamp vertical rotation
+        y: prev.y + deltaX * 0.5
+      }));
+      setLastMousePos({ x: e.clientX, y: e.clientY });
+    } else if (isDraggingQ) {
+      // Inverse projection is hard, so we approximate movement on the XZ plane
+      // based on mouse deltas and current rotation.
+      const deltaX = e.clientX - lastMousePos.x;
+      const deltaY = e.clientY - lastMousePos.y;
+      
+      const radY = toRad(rotation.y);
+      
+      // Calculate movement vector relative to camera view
+      // Moving mouse right (deltaX > 0) should move point along camera's right vector
+      // Moving mouse up (deltaY < 0) should move point "into" the scene (Z)
+      
+      const speed = 1.5;
+      const dx = (deltaX * Math.cos(radY) - deltaY * Math.sin(radY)) * speed;
+      const dz = (deltaX * Math.sin(radY) + deltaY * Math.cos(radY)) * speed; // simplified
+
+      setPointQ(prev => ({
+        x: Math.max(-200, Math.min(200, prev.x + dx)),
+        y: 0, // Constrained to plane
+        z: Math.max(-200, Math.min(200, prev.z - dz)) // Invert Z logic for screen Y
+      }));
+      
+      setLastMousePos({ x: e.clientX, y: e.clientY });
+    }
+  };
+
+  const handleMouseUp = () => {
+    setIsDraggingScene(false);
+    setIsDraggingQ(false);
+  };
+
+  // --- Rendering Loop ---
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    
+    // Clear
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Derived Points
+    const pointO = { x: pointP.x, y: 0, z: pointP.z }; // Orthogonal projection (y=0)
+
+    // 1. Draw Plane Grid (XZ plane)
+    ctx.beginPath();
+    ctx.strokeStyle = '#e5e7eb';
+    ctx.lineWidth = 1;
+    const gridSize = 200;
+    const step = 40;
+
+    // Draw grid lines
+    for (let i = -gridSize; i <= gridSize; i += step) {
+      const p1 = project({ x: i, y: 0, z: -gridSize });
+      const p2 = project({ x: i, y: 0, z: gridSize });
+      ctx.moveTo(p1.x, p1.y);
+      ctx.lineTo(p2.x, p2.y);
+
+      const p3 = project({ x: -gridSize, y: 0, z: i });
+      const p4 = project({ x: gridSize, y: 0, z: i });
+      ctx.moveTo(p3.x, p3.y);
+      ctx.lineTo(p4.x, p4.y);
+    }
+    ctx.stroke();
+
+    // Draw Plane Border
+    ctx.beginPath();
+    ctx.strokeStyle = '#94a3b8';
+    ctx.lineWidth = 2;
+    const corners = [
+      { x: -gridSize, y: 0, z: -gridSize },
+      { x: gridSize, y: 0, z: -gridSize },
+      { x: gridSize, y: 0, z: gridSize },
+      { x: -gridSize, y: 0, z: gridSize }
+    ];
+    const projCorners = corners.map(project);
+    ctx.moveTo(projCorners[0].x, projCorners[0].y);
+    projCorners.forEach(p => ctx.lineTo(p.x, p.y));
+    ctx.closePath();
+    ctx.stroke();
+    
+    // Fill Plane
+    ctx.fillStyle = 'rgba(224, 242, 254, 0.3)'; // Light blue transparent
+    ctx.fill();
+    
+    // Label Plane
+    const labelPos = project({ x: -gridSize + 20, y: 0, z: -gridSize + 20 });
+    ctx.fillStyle = '#64748b';
+    ctx.font = 'italic 20px serif';
+    ctx.fillText('π', labelPos.x, labelPos.y);
+
+
+    // 2. Draw Projection Line (P -> O)
+    const projP = project(pointP);
+    const projO = project(pointO);
+
+    if (showProjection) {
+      ctx.beginPath();
+      ctx.setLineDash([5, 5]);
+      ctx.strokeStyle = '#ef4444'; // Red
+      ctx.lineWidth = 2;
+      ctx.moveTo(projP.x, projP.y);
+      ctx.lineTo(projO.x, projO.y);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Draw Point O
+      ctx.beginPath();
+      ctx.fillStyle = '#ef4444';
+      ctx.arc(projO.x, projO.y, 4 * projO.scale, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Label O
+      ctx.fillStyle = '#ef4444';
+      ctx.font = 'bold 14px sans-serif';
+      ctx.fillText('O', projO.x + 10, projO.y + 10);
+
+      // Right Angle Symbol at O
+      // We need a vector on the plane. Let's use direction towards Q or arbitrary X
+      // Simple approximation: small lines
+      ctx.beginPath();
+      ctx.strokeStyle = '#ef4444';
+      ctx.lineWidth = 1;
+      // This is a cheat for a right angle symbol in 2D projection, 
+      // rigorous 3D right angle drawing is complex without full vector math
+      ctx.rect(projO.x - 5, projO.y - 5, 10, 5); 
+      // ctx.stroke(); // Skipping for visual clarity
+    }
+
+    // 3. Draw Segment PQ
+    const projQ = project(pointQ);
+    
+    if (showSegmentPQ) {
+      ctx.beginPath();
+      ctx.strokeStyle = '#eab308'; // Yellow/Orange
+      ctx.lineWidth = 2;
+      ctx.moveTo(projP.x, projP.y);
+      ctx.lineTo(projQ.x, projQ.y);
+      ctx.stroke();
+
+      // Draw line on plane O -> Q to complete triangle if O is visible
+      if (showProjection) {
+        ctx.beginPath();
+        ctx.strokeStyle = '#94a3b8'; // Slate
+        ctx.setLineDash([2, 2]);
+        ctx.moveTo(projO.x, projO.y);
+        ctx.lineTo(projQ.x, projQ.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    }
+
+    // 4. Draw Point Q
+    ctx.beginPath();
+    ctx.fillStyle = isDraggingQ ? '#facc15' : '#ca8a04';
+    ctx.arc(projQ.x, projQ.y, 6 * projQ.scale, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.stroke();
+    
+    // Label Q
+    ctx.fillStyle = '#ca8a04';
+    ctx.font = 'bold 14px sans-serif';
+    ctx.fillText('Q', projQ.x + 10, projQ.y + 10);
+
+
+    // 5. Draw Point P (Last so it's on top)
+    ctx.beginPath();
+    ctx.fillStyle = '#3b82f6'; // Blue
+    ctx.arc(projP.x, projP.y, 6 * projP.scale, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.stroke();
+
+    // Label P
+    ctx.fillStyle = '#3b82f6';
+    ctx.font = 'bold 16px sans-serif';
+    ctx.fillText('P', projP.x + 12, projP.y - 5);
+
+  }, [rotation, pointP, pointQ, showProjection, showSegmentPQ, isDraggingQ]);
+
+
+  // --- Calculations for UI ---
+  const distOP = Math.abs(pointP.y).toFixed(1);
+  const distPQ = distance3D(pointP, pointQ).toFixed(1);
+  const isMin = Math.abs(parseFloat(distPQ) - parseFloat(distOP)) < 0.1;
+
+  return (
+    <div className="flex flex-col items-center w-full max-w-4xl mx-auto p-4 bg-slate-50 rounded-xl shadow-lg font-sans">
+      <div className="mb-4 text-center">
+        <h1 className="text-2xl font-bold text-slate-800">Orthogonal Projection Visualization</h1>
+        <p className="text-slate-600 text-sm mt-1 max-w-xl mx-auto">
+          The orthogonal projection of a point <span className="font-bold text-blue-600">P</span> onto a plane <span className="font-serif italic">π</span> is the point <span className="font-bold text-red-500">O</span> such that the distance <span className="font-mono">|PO|</span> is minimized.
+        </p>
+      </div>
+
+      {/* Canvas Container */}
+      <div 
+        ref={containerRef}
+        className="relative w-full aspect-[4/3] bg-white rounded-lg shadow-inner border border-slate-200 overflow-hidden cursor-move touch-none"
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+      >
+        <canvas 
+          ref={canvasRef}
+          width={800}
+          height={600}
+          className="w-full h-full block"
+        />
+        
+        {/* Instructions Overlay */}
+        <div className="absolute top-4 left-4 bg-white/80 backdrop-blur px-3 py-2 rounded text-xs text-slate-600 pointer-events-none select-none">
+          <div className="flex items-center gap-2 mb-1">
+            <Move size={14} /> Drag background to rotate view
+          </div>
+          <div className="flex items-center gap-2">
+            <MousePointer2 size={14} /> Drag point <span className="font-bold text-yellow-600">Q</span> to move on plane
+          </div>
+        </div>
+      </div>
+
+      {/* Controls Dashboard */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full mt-6">
+        
+        {/* Left Column: Actions */}
+        <div className="space-y-4">
+          <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
+            <h3 className="font-semibold text-slate-700 mb-3 flex items-center gap-2">
+              <Info size={16}/> Controls
+            </h3>
+            
+            <button 
+              onClick={randomizeP}
+              className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded transition-colors mb-3"
+            >
+              <RefreshCw size={18} />
+              Move Point P
+            </button>
+
+            <div className="flex gap-2">
+              <button 
+                onClick={() => setShowProjection(!showProjection)}
+                className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded border transition-colors ${showProjection ? 'bg-red-50 border-red-200 text-red-700' : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'}`}
+              >
+                {showProjection ? <Eye size={18} /> : <EyeOff size={18} />}
+                {showProjection ? 'Hide' : 'Show'} Projection (O)
+              </button>
+
+              <button 
+                onClick={() => setShowSegmentPQ(!showSegmentPQ)}
+                className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded border transition-colors ${showSegmentPQ ? 'bg-yellow-50 border-yellow-200 text-yellow-700' : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'}`}
+              >
+                {showSegmentPQ ? <Eye size={18} /> : <EyeOff size={18} />}
+                {showSegmentPQ ? 'Hide' : 'Show'} Segment PQ
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Right Column: Data/Math */}
+        <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm flex flex-col justify-center">
+          <h3 className="font-semibold text-slate-700 mb-3">Measurements</h3>
+          
+          <div className="space-y-3">
+            <div className={`flex justify-between items-center p-2 rounded ${showProjection ? 'bg-red-50' : 'opacity-50'}`}>
+              <span className="text-slate-700 font-medium">Distance |PO| (Min):</span>
+              <span className="font-mono text-lg font-bold text-red-600">
+                {showProjection ? distOP : '---'}
+              </span>
+            </div>
+
+            <div className={`flex justify-between items-center p-2 rounded ${showSegmentPQ ? 'bg-yellow-50' : 'opacity-50'}`}>
+              <span className="text-slate-700 font-medium">Distance |PQ|:</span>
+              <span className="font-mono text-lg font-bold text-yellow-600">
+                {showSegmentPQ ? distPQ : '---'}
+              </span>
+            </div>
+            
+            {showProjection && showSegmentPQ && (
+               <div className={`mt-2 text-center text-sm p-2 rounded border ${isMin ? 'bg-green-100 border-green-300 text-green-800' : 'bg-slate-100 border-slate-200 text-slate-600'}`}>
+                 {isMin 
+                   ? <span><strong>Q coincides with O!</strong> Distance is minimized.</span> 
+                   : <span>|PQ| &gt; |PO| implies <strong>Q ≠ O</strong></span>
+                 }
+               </div>
+            )}
+          </div>
+        </div>
+
+      </div>
+    </div>
+  );
+};
+
+export default OrthogonalProjectionViz;
