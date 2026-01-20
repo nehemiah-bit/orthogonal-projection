@@ -1,0 +1,900 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Orthogonal Projection Visualization - Interactive 3D tool">
+    <meta name="theme-color" content="#3b82f6">
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect fill='%233b82f6' width='192' height='192'/><text x='96' y='128' font-size='100' fill='white' text-anchor='middle' dominant-baseline='middle'>π</text></svg>">
+    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect fill='%233b82f6' width='192' height='192'/><text x='96' y='128' font-size='100' fill='white' text-anchor='middle' dominant-baseline='middle'>π</text></svg>">
+    <title>Orthogonal Projection Visualization</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+            color: #1e293b;
+        }
+
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+            min-height: 100vh;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            max-width: 56rem;
+            padding: 1rem;
+            background: #f8fafc;
+            border-radius: 0.75rem;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 1.5rem;
+            width: 100%;
+        }
+
+        h1 {
+            font-size: 1.875rem;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 0.5rem;
+        }
+
+        .description {
+            color: #64748b;
+            font-size: 0.875rem;
+            line-height: 1.5;
+            max-width: 42rem;
+        }
+
+        .canvas-wrapper {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 4 / 3;
+            background: white;
+            border-radius: 0.5rem;
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.05);
+            border: 1px solid #e2e8f0;
+            overflow: hidden;
+            margin-bottom: 1.5rem;
+            cursor: move;
+            touch-action: none;
+        }
+
+        canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .instructions {
+            position: absolute;
+            top: 1rem;
+            left: 1rem;
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(4px);
+            padding: 0.75rem;
+            border-radius: 0.375rem;
+            font-size: 0.75rem;
+            color: #64748b;
+            pointer-events: none;
+            user-select: none;
+            line-height: 1.5;
+        }
+
+        .instructions-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .instructions-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .controls-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            width: 100%;
+        }
+
+        .control-panel {
+            background: white;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        .control-panel h3 {
+            font-weight: 600;
+            color: #475569;
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.875rem;
+        }
+
+        button {
+            font-family: inherit;
+            border: none;
+            border-radius: 0.375rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        .btn-primary {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            background: #3b82f6;
+            color: white;
+            padding: 0.5rem 1rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .btn-primary:hover {
+            background: #2563eb;
+        }
+
+        .btn-primary:active {
+            background: #1d4ed8;
+        }
+
+        .btn-secondary {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            padding: 0.5rem 0.75rem;
+            border: 1px solid #e2e8f0;
+            background: #f8fafc;
+            color: #64748b;
+            transition: all 0.2s ease;
+        }
+
+        .btn-secondary:hover {
+            background: #f1f5f9;
+        }
+
+        .btn-secondary.active-red {
+            background: #fee2e2;
+            border-color: #fecaca;
+            color: #b91c1c;
+        }
+
+        .btn-secondary.active-yellow {
+            background: #fef3c7;
+            border-color: #fde68a;
+            color: #b45309;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .measurements {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 0.75rem;
+        }
+
+        .measurement-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem;
+            border-radius: 0.375rem;
+        }
+
+        .measurement-row.hidden {
+            opacity: 0.5;
+            pointer-events: none;
+        }
+
+        .measurement-row.red {
+            background: #fee2e2;
+        }
+
+        .measurement-row.yellow {
+            background: #fef3c7;
+        }
+
+        .measurement-label {
+            color: #475569;
+            font-weight: 500;
+            font-size: 0.875rem;
+        }
+
+        .measurement-value {
+            font-family: 'Courier New', monospace;
+            font-size: 1.125rem;
+            font-weight: 700;
+        }
+
+        .measurement-value.red {
+            color: #dc2626;
+        }
+
+        .measurement-value.yellow {
+            color: #ca8a04;
+        }
+
+        .info-box {
+            margin-top: 0.75rem;
+            padding: 0.5rem;
+            border-radius: 0.375rem;
+            border: 1px solid #ccc;
+            font-size: 0.875rem;
+            text-align: center;
+            line-height: 1.4;
+        }
+
+        .info-box.success {
+            background: #dcfce7;
+            border-color: #86efac;
+            color: #166534;
+        }
+
+        .info-box.neutral {
+            background: #f1f5f9;
+            border-color: #cbd5e1;
+            color: #475569;
+        }
+
+        .info-box strong {
+            font-weight: 600;
+        }
+
+        @media (max-width: 768px) {
+            .controls-grid {
+                grid-template-columns: 1fr;
+            }
+
+            h1 {
+                font-size: 1.5rem;
+            }
+
+            .description {
+                font-size: 0.8125rem;
+            }
+        }
+
+        /* PWA Install Prompt */
+        .install-prompt {
+            display: none;
+            position: fixed;
+            bottom: 1rem;
+            right: 1rem;
+            background: white;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2);
+            z-index: 1000;
+            max-width: 300px;
+        }
+
+        .install-prompt.show {
+            display: block;
+            animation: slideUp 0.3s ease;
+        }
+
+        @keyframes slideUp {
+            from {
+                transform: translateY(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .install-prompt-content {
+            font-size: 0.875rem;
+            margin-bottom: 0.75rem;
+            color: #475569;
+        }
+
+        .install-prompt-buttons {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .btn-install {
+            flex: 1;
+            padding: 0.5rem;
+            background: #3b82f6;
+            color: white;
+            border-radius: 0.375rem;
+            cursor: pointer;
+            font-size: 0.8125rem;
+            font-weight: 600;
+            border: none;
+            transition: background 0.2s ease;
+        }
+
+        .btn-install:hover {
+            background: #2563eb;
+        }
+
+        .btn-dismiss {
+            flex: 1;
+            padding: 0.5rem;
+            background: #e2e8f0;
+            color: #475569;
+            border-radius: 0.375rem;
+            cursor: pointer;
+            font-size: 0.8125rem;
+            font-weight: 600;
+            border: none;
+            transition: background 0.2s ease;
+        }
+
+        .btn-dismiss:hover {
+            background: #cbd5e1;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Orthogonal Projection Visualization</h1>
+            <p class="description">
+                The orthogonal projection of a point <strong style="color: #2563eb;">P</strong> onto a plane <span style="font-style: italic; font-family: serif;">π</span> is the point <strong style="color: #dc2626;">O</strong> such that the distance <code style="font-family: monospace;">|PO|</code> is minimized.
+            </p>
+        </div>
+
+        <div class="canvas-wrapper">
+            <canvas id="canvas" width="800" height="600"></canvas>
+            <div class="instructions">
+                <div class="instructions-item">
+                    ✋ Drag background to rotate view
+                </div>
+                <div class="instructions-item">
+                    ⇧ Shift+drag to pan/translate
+                </div>
+                <div class="instructions-item">
+                    👆 Drag point <strong style="color: #ca8a04;">Q</strong> to move on plane
+                </div>
+            </div>
+        </div>
+
+        <div class="controls-grid">
+            <!-- Left Column: Controls -->
+            <div class="control-panel">
+                <h3>
+                    <span>ℹ️</span> Controls
+                </h3>
+
+                <button class="btn-primary" id="randomizeBtn">
+                    🔄 Move Point P
+                </button>
+
+                <div class="button-group">
+                    <button class="btn-secondary" id="projectionToggle">
+                        👁️ Show Projection (O)
+                    </button>
+                    <button class="btn-secondary" id="segmentToggle">
+                        👁️ Show Segment PQ
+                    </button>
+                </div>
+            </div>
+
+            <!-- Right Column: Data/Math -->
+            <div class="control-panel">
+                <h3>📊 Measurements</h3>
+
+                <div class="measurements">
+                    <div class="measurement-row red" id="distanceOP">
+                        <span class="measurement-label">Distance |PO| (Min):</span>
+                        <span class="measurement-value red" id="distanceOPValue">---</span>
+                    </div>
+
+                    <div class="measurement-row yellow" id="distancePQ">
+                        <span class="measurement-label">Distance |PQ|:</span>
+                        <span class="measurement-value yellow" id="distancePQValue">---</span>
+                    </div>
+
+                    <div class="info-box neutral" id="infoBox" style="display: none;">
+                        <span id="infoText"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="install-prompt" id="installPrompt">
+        <div class="install-prompt-content">
+            📲 Add to your home screen for easy access!
+        </div>
+        <div class="install-prompt-buttons">
+            <button class="btn-install" id="installBtn">Install</button>
+            <button class="btn-dismiss" id="dismissBtn">Dismiss</button>
+        </div>
+    </div>
+
+    <script>
+        // ==================== PWA SETUP ====================
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js')
+                    .then(reg => console.log('✅ Service Worker registered:', reg))
+                    .catch(err => console.error('❌ Service Worker registration failed:', err));
+            });
+        }
+
+        let deferredPrompt;
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            document.getElementById('installPrompt').classList.add('show');
+        });
+
+        document.getElementById('installBtn').addEventListener('click', async () => {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                const { outcome } = await deferredPrompt.userChoice;
+                console.log(`User response: ${outcome}`);
+                deferredPrompt = null;
+                document.getElementById('installPrompt').classList.remove('show');
+            }
+        });
+
+        document.getElementById('dismissBtn').addEventListener('click', () => {
+            document.getElementById('installPrompt').classList.remove('show');
+        });
+
+        // ==================== 3D VISUALIZATION ====================
+        
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const containerRect = () => ({ 
+            width: canvas.offsetWidth, 
+            height: canvas.offsetHeight 
+        });
+
+        // State
+        let state = {
+            rotation: { x: -20, y: 45 },
+            translation: { x: 0, y: 0 },
+            pointP: { x: 50, y: 120, z: 50 },
+            pointQ: { x: -50, y: 0, z: -50 },
+            showProjection: false,
+            showSegmentPQ: false,
+            isDraggingScene: false,
+            isDraggingQ: false,
+            isTranslating: false,
+            lastMousePos: { x: 0, y: 0 },
+            zoom: 1
+        };
+
+        // Math Helpers
+        const toRad = (deg) => (deg * Math.PI) / 180;
+
+        const project = (p) => {
+            const radX = toRad(state.rotation.x);
+            const radY = toRad(state.rotation.y);
+
+            const x1 = p.x * Math.cos(radY) - p.z * Math.sin(radY);
+            const z1 = p.x * Math.sin(radY) + p.z * Math.cos(radY);
+
+            const y2 = p.y * Math.cos(radX) - z1 * Math.sin(radX);
+            const z2 = p.y * Math.sin(radX) + z1 * Math.cos(radX);
+
+            const scale = (800 / (800 + z2)) * state.zoom;
+
+            return {
+                x: 400 + x1 * scale + state.translation.x,
+                y: 300 - y2 * scale + state.translation.y,
+                scale: scale,
+                depth: z2
+            };
+        };
+
+        const distance3D = (p1, p2) => {
+            return Math.sqrt(
+                Math.pow(p2.x - p1.x, 2) + 
+                Math.pow(p2.y - p1.y, 2) + 
+                Math.pow(p2.z - p1.z, 2)
+            );
+        };
+
+        // Event Handlers
+        canvas.addEventListener('mousedown', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            const projQ = project(state.pointQ);
+            const distToQ = Math.sqrt(Math.pow(mouseX - projQ.x, 2) + Math.pow(mouseY - projQ.y, 2));
+
+            if (distToQ < 50) { // Large hit radius for easy dragging
+                state.isDraggingQ = true;
+                e.preventDefault();
+            } else if (e.shiftKey) {
+                // Shift+click for translation
+                state.isTranslating = true;
+            } else {
+                state.isDraggingScene = true;
+            }
+            state.lastMousePos = { x: e.clientX, y: e.clientY };
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            // Check cursor position for hover feedback
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            const projQ = project(state.pointQ);
+            const distToQ = Math.sqrt(Math.pow(mouseX - projQ.x, 2) + Math.pow(mouseY - projQ.y, 2));
+
+            if (distToQ < 50) {
+                canvas.style.cursor = 'grab';
+            } else if (state.isDraggingScene) {
+                canvas.style.cursor = 'grabbing';
+            } else if (e.shiftKey) {
+                canvas.style.cursor = 'pan-hand';
+            } else {
+                canvas.style.cursor = 'move';
+            }
+
+            if (state.isDraggingScene) {
+                const deltaX = e.clientX - state.lastMousePos.x;
+                const deltaY = e.clientY - state.lastMousePos.y;
+                state.rotation.x = Math.max(-85, Math.min(85, state.rotation.x + deltaY * 0.5));
+                state.rotation.y += deltaX * 0.5;
+                state.lastMousePos = { x: e.clientX, y: e.clientY };
+                render();
+            } else if (state.isDraggingQ) {
+                const deltaX = e.clientX - state.lastMousePos.x;
+                const deltaY = e.clientY - state.lastMousePos.y;
+                const radY = toRad(state.rotation.y);
+                const speed = 1.5;
+                const dx = (deltaX * Math.cos(radY) - deltaY * Math.sin(radY)) * speed;
+                const dz = (deltaX * Math.sin(radY) + deltaY * Math.cos(radY)) * speed;
+                state.pointQ.x = Math.max(-200, Math.min(200, state.pointQ.x + dx));
+                state.pointQ.z = Math.max(-200, Math.min(200, state.pointQ.z - dz));
+                state.lastMousePos = { x: e.clientX, y: e.clientY };
+                render();
+            } else if (state.isTranslating) {
+                const deltaX = e.clientX - state.lastMousePos.x;
+                const deltaY = e.clientY - state.lastMousePos.y;
+                state.translation.x += deltaX;
+                state.translation.y += deltaY;
+                state.lastMousePos = { x: e.clientX, y: e.clientY };
+                render();
+            }
+        });
+
+        document.addEventListener('mouseup', () => {
+            state.isDraggingScene = false;
+            state.isDraggingQ = false;
+            state.isTranslating = false;
+        });
+
+        // Touch Events
+        canvas.addEventListener('touchstart', (e) => {
+            const touch = e.touches[0];
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = touch.clientX - rect.left;
+            const mouseY = touch.clientY - rect.top;
+
+            const projQ = project(state.pointQ);
+            const distToQ = Math.sqrt(Math.pow(mouseX - projQ.x, 2) + Math.pow(mouseY - projQ.y, 2));
+
+            if (distToQ < 50) { // Large hit radius for easy dragging
+                state.isDraggingQ = true;
+                e.preventDefault();
+            } else {
+                state.isDraggingScene = true;
+            }
+            state.lastMousePos = { x: touch.clientX, y: touch.clientY };
+        });
+
+        document.addEventListener('touchmove', (e) => {
+            if (state.isDraggingScene || state.isDraggingQ) {
+                const touch = e.touches[0];
+                const deltaX = touch.clientX - state.lastMousePos.x;
+                const deltaY = touch.clientY - state.lastMousePos.y;
+
+                if (state.isDraggingScene) {
+                    state.rotation.x = Math.max(-85, Math.min(85, state.rotation.x + deltaY * 0.5));
+                    state.rotation.y += deltaX * 0.5;
+                } else if (state.isDraggingQ) {
+                    const radY = toRad(state.rotation.y);
+                    const speed = 1.5;
+                    const dx = (deltaX * Math.cos(radY) - deltaY * Math.sin(radY)) * speed;
+                    const dz = (deltaX * Math.sin(radY) + deltaY * Math.cos(radY)) * speed;
+                    state.pointQ.x = Math.max(-200, Math.min(200, state.pointQ.x + dx));
+                    state.pointQ.z = Math.max(-200, Math.min(200, state.pointQ.z - dz));
+                }
+                state.lastMousePos = { x: touch.clientX, y: touch.clientY };
+                render();
+            }
+        });
+
+        document.addEventListener('touchend', () => {
+            state.isDraggingScene = false;
+            state.isDraggingQ = false;
+        });
+
+        // Zoom with Mouse Wheel
+        canvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const zoomSpeed = 0.1;
+            if (e.deltaY < 0) {
+                state.zoom = Math.min(3, state.zoom + zoomSpeed); // Zoom in
+            } else {
+                state.zoom = Math.max(0.5, state.zoom - zoomSpeed); // Zoom out
+            }
+            render();
+        }, { passive: false });
+
+        // UI Controls
+        document.getElementById('randomizeBtn').addEventListener('click', () => {
+            state.pointP = {
+                x: (Math.random() - 0.5) * 200,
+                y: 80 + Math.random() * 100,
+                z: (Math.random() - 0.5) * 200
+            };
+            render();
+        });
+
+        document.getElementById('projectionToggle').addEventListener('click', function () {
+            state.showProjection = !state.showProjection;
+            this.classList.toggle('active-red');
+            this.textContent = state.showProjection ? '👁️ Hide Projection (O)' : '👁️ Show Projection (O)';
+            updateMeasurements();
+            render();
+        });
+
+        document.getElementById('segmentToggle').addEventListener('click', function () {
+            state.showSegmentPQ = !state.showSegmentPQ;
+            this.classList.toggle('active-yellow');
+            this.textContent = state.showSegmentPQ ? '👁️ Hide Segment PQ' : '👁️ Show Segment PQ';
+            updateMeasurements();
+            render();
+        });
+
+        // Rendering
+        function render() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            const pointO = { x: state.pointP.x, y: 0, z: state.pointP.z };
+
+            // Draw Plane Grid
+            ctx.beginPath();
+            ctx.strokeStyle = '#e5e7eb';
+            ctx.lineWidth = 1;
+            const gridSize = 200;
+            const step = 40;
+
+            for (let i = -gridSize; i <= gridSize; i += step) {
+                const p1 = project({ x: i, y: 0, z: -gridSize });
+                const p2 = project({ x: i, y: 0, z: gridSize });
+                ctx.moveTo(p1.x, p1.y);
+                ctx.lineTo(p2.x, p2.y);
+
+                const p3 = project({ x: -gridSize, y: 0, z: i });
+                const p4 = project({ x: gridSize, y: 0, z: i });
+                ctx.moveTo(p3.x, p3.y);
+                ctx.lineTo(p4.x, p4.y);
+            }
+            ctx.stroke();
+
+            // Draw Plane Border
+            ctx.beginPath();
+            ctx.strokeStyle = '#94a3b8';
+            ctx.lineWidth = 2;
+            const corners = [
+                { x: -gridSize, y: 0, z: -gridSize },
+                { x: gridSize, y: 0, z: -gridSize },
+                { x: gridSize, y: 0, z: gridSize },
+                { x: -gridSize, y: 0, z: gridSize }
+            ];
+            const projCorners = corners.map(project);
+            ctx.moveTo(projCorners[0].x, projCorners[0].y);
+            projCorners.forEach(p => ctx.lineTo(p.x, p.y));
+            ctx.closePath();
+            ctx.stroke();
+
+            ctx.fillStyle = 'rgba(224, 242, 254, 0.3)';
+            ctx.fill();
+
+            const labelPos = project({ x: -gridSize + 20, y: 0, z: -gridSize + 20 });
+            ctx.fillStyle = '#64748b';
+            ctx.font = 'italic 20px serif';
+            ctx.fillText('π', labelPos.x, labelPos.y);
+
+            // Draw Projection Line
+            const projP = project(state.pointP);
+            const projO = project(pointO);
+
+            if (state.showProjection) {
+                ctx.beginPath();
+                ctx.setLineDash([5, 5]);
+                ctx.strokeStyle = '#ef4444';
+                ctx.lineWidth = 2;
+                ctx.moveTo(projP.x, projP.y);
+                ctx.lineTo(projO.x, projO.y);
+                ctx.stroke();
+                ctx.setLineDash([]);
+
+                ctx.beginPath();
+                ctx.fillStyle = '#ef4444';
+                ctx.arc(projO.x, projO.y, 4 * projO.scale, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.fillStyle = '#ef4444';
+                ctx.font = 'bold 14px sans-serif';
+                ctx.fillText('O', projO.x + 10, projO.y + 10);
+            }
+
+            // Draw Segment PQ
+            const projQ = project(state.pointQ);
+
+            if (state.showSegmentPQ) {
+                ctx.beginPath();
+                ctx.strokeStyle = '#eab308';
+                ctx.lineWidth = 2;
+                ctx.moveTo(projP.x, projP.y);
+                ctx.lineTo(projQ.x, projQ.y);
+                ctx.stroke();
+
+                if (state.showProjection) {
+                    ctx.beginPath();
+                    ctx.strokeStyle = '#94a3b8';
+                    ctx.setLineDash([2, 2]);
+                    ctx.moveTo(projO.x, projO.y);
+                    ctx.lineTo(projQ.x, projQ.y);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+
+                    // Draw right angle symbol at O
+                    const rightAngleSize = 15;
+                    const vectorOP = { x: projP.x - projO.x, y: projP.y - projO.y };
+                    const vectorOQ = { x: projQ.x - projO.x, y: projQ.y - projO.y };
+                    const lenOP = Math.sqrt(vectorOP.x * vectorOP.x + vectorOP.y * vectorOP.y);
+                    const lenOQ = Math.sqrt(vectorOQ.x * vectorOQ.x + vectorOQ.y * vectorOQ.y);
+                    
+                    if (lenOP > 0 && lenOQ > 0) {
+                        const unitOP = { x: vectorOP.x / lenOP, y: vectorOP.y / lenOP };
+                        const unitOQ = { x: vectorOQ.x / lenOQ, y: vectorOQ.y / lenOQ };
+                        
+                        // Draw small square at right angle
+                        const corner1 = {
+                            x: projO.x + unitOP.x * rightAngleSize,
+                            y: projO.y + unitOP.y * rightAngleSize
+                        };
+                        const corner2 = {
+                            x: projO.x + unitOQ.x * rightAngleSize,
+                            y: projO.y + unitOQ.y * rightAngleSize
+                        };
+                        const corner3 = {
+                            x: corner1.x + unitOQ.x * rightAngleSize,
+                            y: corner1.y + unitOQ.y * rightAngleSize
+                        };
+                        
+                        ctx.beginPath();
+                        ctx.strokeStyle = '#ef4444';
+                        ctx.lineWidth = 1.5;
+                        ctx.moveTo(corner1.x, corner1.y);
+                        ctx.lineTo(corner3.x, corner3.y);
+                        ctx.lineTo(corner2.x, corner2.y);
+                        ctx.stroke();
+
+                        // Add "90°" text
+                        ctx.fillStyle = '#ef4444';
+                        ctx.font = 'bold 12px sans-serif';
+                        const textX = projO.x + (unitOP.x + unitOQ.x) * 25;
+                        const textY = projO.y + (unitOP.y + unitOQ.y) * 25;
+                        ctx.fillText('90°', textX, textY);
+                    }
+                }
+            }
+
+            // Draw Point Q
+            ctx.beginPath();
+            ctx.fillStyle = state.isDraggingQ ? '#facc15' : '#ca8a04';
+            ctx.arc(projQ.x, projQ.y, 6 * projQ.scale, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            ctx.fillStyle = '#ca8a04';
+            ctx.font = 'bold 14px sans-serif';
+            ctx.fillText('Q', projQ.x + 10, projQ.y + 10);
+
+            // Draw Point P
+            ctx.beginPath();
+            ctx.fillStyle = '#3b82f6';
+            ctx.arc(projP.x, projP.y, 6 * projP.scale, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            ctx.fillStyle = '#3b82f6';
+            ctx.font = 'bold 16px sans-serif';
+            ctx.fillText('P', projP.x + 12, projP.y - 5);
+        }
+
+        // Update Measurements
+        function updateMeasurements() {
+            const distOP = Math.abs(state.pointP.y).toFixed(1);
+            const distPQ = distance3D(state.pointP, state.pointQ).toFixed(1);
+            const isMin = Math.abs(parseFloat(distPQ) - parseFloat(distOP)) < 0.1;
+
+            const distanceOPRow = document.getElementById('distanceOP');
+            const distancePQRow = document.getElementById('distancePQ');
+            const infoBox = document.getElementById('infoBox');
+
+            if (state.showProjection) {
+                document.getElementById('distanceOPValue').textContent = distOP;
+                distanceOPRow.classList.remove('hidden');
+            } else {
+                document.getElementById('distanceOPValue').textContent = '---';
+                distanceOPRow.classList.add('hidden');
+            }
+
+            if (state.showSegmentPQ) {
+                document.getElementById('distancePQValue').textContent = distPQ;
+                distancePQRow.classList.remove('hidden');
+            } else {
+                document.getElementById('distancePQValue').textContent = '---';
+                distancePQRow.classList.add('hidden');
+            }
+
+            if (state.showProjection && state.showSegmentPQ) {
+                infoBox.style.display = 'block';
+                if (isMin) {
+                    infoBox.className = 'info-box success';
+                    document.getElementById('infoText').innerHTML = '<strong>Q coincides with O!</strong> Distance is minimized.';
+                } else {
+                    infoBox.className = 'info-box neutral';
+                    document.getElementById('infoText').innerHTML = '|PQ| &gt; |PO| implies <strong>Q ≠ O</strong>';
+                }
+            } else {
+                infoBox.style.display = 'none';
+            }
+        }
+
+        // Initial render
+        render();
+        updateMeasurements();
+
+        // Handle window resize
+        window.addEventListener('resize', render);
+    </script>
+</body>
+</html>
